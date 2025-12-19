@@ -5,6 +5,9 @@
 // @description  Tự động dịch thẻ <p> trên toàn bộ W3Schools sang tiếng Việt, giữ nguyên nội dung trong <code>
 // @author       Taki Shuichi (Quốc Anh)
 // @match        https://www.w3schools.com/*
+
+// @updateURL    https://raw.githubusercontent.com/Illya1123/Script_Violentmonkey/refs/heads/main/W3Schools_Auto_Translate.js
+// @downloadURL  https://raw.githubusercontent.com/Illya1123/Script_Violentmonkey/refs/heads/main/W3Schools_Auto_Translate.js
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // @connect      translate.googleapis.com
