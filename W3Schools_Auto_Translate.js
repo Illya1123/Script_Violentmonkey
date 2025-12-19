@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         W3Schools — Auto Translate
 // @namespace    vm-w3s-translate
-// @version      1.0
+// @version      1.1
 // @description  Tự động dịch thẻ <p> trên toàn bộ W3Schools sang tiếng Việt, giữ nguyên nội dung trong <code>
 // @author       Taki Shuichi (Quốc Anh)
 // @match        https://www.w3schools.com/*
@@ -18,52 +18,100 @@
 
   const TARGET_LANG = "vi";
   const SELECTOR = "p";
+  const SKIP_WITHIN = new Set(["CODE", "PRE", "KBD", "SAMP"]);
+  const processed = new WeakSet();
 
-  function gmGet(url) {
+  // --- GM xhr compat layer (VM/TM, Chromium/Gecko) ---
+  const gmXHR = (opts) => {
+    const fn = (typeof GM !== "undefined" && GM.xmlHttpRequest)
+      ? GM.xmlHttpRequest
+      : (typeof GM_xmlhttpRequest !== "undefined" ? GM_xmlhttpRequest : null);
+    if (!fn) throw new Error("No GM xmlHttpRequest available");
+    return fn(opts);
+  };
+
+  function gmGetJSON(url) {
     return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: "GET",
-        url,
-        headers: { Accept: "application/json, text/javascript" },
-        onload: (r) =>
-          r.status >= 200 && r.status < 300
-            ? resolve(r.responseText)
-            : reject(new Error("HTTP " + r.status)),
-        onerror: reject,
-      });
+      try {
+        gmXHR({
+          method: "GET",
+          url,
+          anonymous: true,            // giúp ổn định trên Firefox
+          timeout: 15000,
+          responseType: "json",       // Firefox hỗ trợ, nếu không sẽ là text
+          headers: { "Accept": "application/json, text/javascript" },
+          onload: (r) => {
+            // Khi responseType không được hỗ trợ, r.response = null -> dùng responseText
+            let data = r.response;
+            if (!data) {
+              try { data = JSON.parse(r.responseText); }
+              catch (e) { return reject(e); }
+            }
+            resolve(data);
+          },
+          ontimeout: () => reject(new Error("Request timeout")),
+          onerror: (e) => reject(e),
+        });
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 
   async function translateText(text) {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${TARGET_LANG}&dt=t&q=${encodeURIComponent(
-      text
-    )}`;
+    // NOTE: API không chính thức của Google Translate
+    const url =
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(TARGET_LANG)}&dt=t&q=${encodeURIComponent(text)}`;
     try {
-      const raw = await gmGet(url);
-      const data = JSON.parse(raw);
-      return data[0].map((x) => x[0]).join("");
+      const data = await gmGetJSON(url);
+      // data[0] = [[translated, original, ...], ...]
+      return Array.isArray(data?.[0]) ? data[0].map(x => x?.[0] ?? "").join("") : text;
     } catch (e) {
       console.debug("Translate fallback (keep original):", e);
       return text;
     }
   }
 
-  const processed = new WeakSet();
+  // Lấy mọi text node trong <p> nhưng bỏ qua phần nằm trong code-like
+  function getTranslatableTextNodes(rootEl) {
+    const tw = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const p = node.parentElement;
+        if (!p) return NodeFilter.FILTER_REJECT;
+        // bỏ qua nếu text nằm trong các thẻ code-like
+        if (SKIP_WITHIN.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    let n;
+    while ((n = tw.nextNode())) nodes.push(n);
+    return nodes;
+  }
 
   async function translateParagraph(el) {
     if (processed.has(el)) return;
     processed.add(el);
 
-    const childNodes = Array.from(el.childNodes);
-    for (const node of childNodes) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const original = node.nodeValue.trim();
-        if (original) {
-          const vn = await translateText(original);
-          node.nodeValue = vn;
-        }
+    const textNodes = getTranslatableTextNodes(el);
+    // Dịch từng node để giữ đúng vị trí, tránh phá layout/code
+    for (const node of textNodes) {
+      const original = node.nodeValue.trim();
+      if (!original) continue;
+
+      // Tránh spam API cho đoạn quá ngắn/chứa toàn ký tự đặc biệt
+      if (/^[\s.,;:()\[\]{}'"`~!@#$%^&*\-_/\\|<>+]+$/.test(original)) continue;
+
+      try {
+        const translated = await translateText(original);
+        // Giữ nguyên khoảng trắng đầu/cuối ban đầu nếu có
+        const leading = node.nodeValue.match(/^\s*/)?.[0] ?? "";
+        const trailing = node.nodeValue.match(/\s*$/)?.[0] ?? "";
+        node.nodeValue = leading + translated + trailing;
+      } catch {
+        // bỏ qua nếu lỗi, giữ nguyên text
       }
-      // Nếu là <code> thì bỏ qua, giữ nguyên
     }
   }
 
@@ -80,12 +128,12 @@
     };
   }
 
-  const run = debounce(translateAllP, 250);
+  const run = debounce(translateAllP, 300);
 
-  window.addEventListener("load", run);
+  // Khởi chạy và quan sát thay đổi DOM (SPA của W3Schools)
+  if (document.readyState === "complete") run();
+  else window.addEventListener("load", run);
+
   const observer = new MutationObserver(run);
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
