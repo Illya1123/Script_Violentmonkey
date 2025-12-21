@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         TikTok Scripts
+// @name         TikTok Scripts (data-e2e)
 // @namespace    Violentmonkey Scripts
-// @version      1.2
+// @version      1.3
 // @description  Arrow cuộn, L like, C mở comment TikTok
 // @match        https://www.tiktok.com/*
 // @grant        none
@@ -20,35 +20,24 @@
         );
     }
 
-    function clickFromSvg(svg) {
-        let clickable = svg.closest('button, div');
-        if (clickable) {
-            clickable.click();
-            return true;
-        }
-        return false;
-    }
-
     function clickLikeButton() {
-        const heartSvg = document.querySelector(
-            'svg[width="24"][height="24"] path[fill-rule="evenodd"]'
-        );
-        if (!heartSvg) {
+        const heart = document.querySelector('[data-e2e="like-icon"], [data-e2e="browse-like-icon"]');
+        if (!heart) {
             console.warn('Không tìm thấy nút Like');
             return;
         }
-        clickFromSvg(heartSvg);
+
+        (heart.closest('button, div') || heart).click();
     }
 
     function clickCommentButton() {
-        const commentSvg = document.querySelector(
-            'svg[width="24"][height="24"][viewBox="0 0 48 48"] path[fill-rule="evenodd"]'
-        );
-        if (!commentSvg) {
+        const comment = document.querySelector('[data-e2e="comment-icon"]');
+        if (!comment) {
             console.warn('Không tìm thấy nút Comment');
             return;
         }
-        clickFromSvg(commentSvg);
+
+        (comment.closest('button, div') || comment).click();
     }
 
     document.addEventListener('keydown', function (e) {
