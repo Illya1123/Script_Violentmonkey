@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         TikTok Arrow Scroll + Like
+// @name         TikTok Scripts
 // @namespace    Violentmonkey Scripts
-// @version      1.1
-// @description  Dùng phím mũi tên để cuộn TikTok và nhấn L để like video
+// @version      1.2
+// @description  Arrow cuộn, L like, C mở comment TikTok
 // @match        https://www.tiktok.com/*
 // @grant        none
 // ==/UserScript==
@@ -20,42 +20,60 @@
         );
     }
 
+    function clickFromSvg(svg) {
+        let clickable = svg.closest('button, div');
+        if (clickable) {
+            clickable.click();
+            return true;
+        }
+        return false;
+    }
+
     function clickLikeButton() {
         const heartSvg = document.querySelector(
             'svg[width="24"][height="24"] path[fill-rule="evenodd"]'
         );
-
         if (!heartSvg) {
-            console.warn('Không tìm thấy nút Tim');
+            console.warn('Không tìm thấy nút Like');
             return;
         }
+        clickFromSvg(heartSvg);
+    }
 
-        let clickable = heartSvg.closest('button, div');
-
-        if (clickable) {
-            clickable.click();
-            console.log('Đã like video');
-        } else {
-            console.warn('Không tìm thấy element có thể click');
+    function clickCommentButton() {
+        const commentSvg = document.querySelector(
+            'svg[width="24"][height="24"][viewBox="0 0 48 48"] path[fill-rule="evenodd"]'
+        );
+        if (!commentSvg) {
+            console.warn('Không tìm thấy nút Comment');
+            return;
         }
+        clickFromSvg(commentSvg);
     }
 
     document.addEventListener('keydown', function (e) {
         if (isTypingTarget(e.target)) return;
 
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            window.scrollBy({ top: scrollStep, behavior: 'smooth' });
-        }
+        switch (e.key.toLowerCase()) {
+            case 'arrowdown':
+                e.preventDefault();
+                window.scrollBy({ top: scrollStep, behavior: 'smooth' });
+                break;
 
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            window.scrollBy({ top: -scrollStep, behavior: 'smooth' });
-        }
+            case 'arrowup':
+                e.preventDefault();
+                window.scrollBy({ top: -scrollStep, behavior: 'smooth' });
+                break;
 
-        if (e.key.toLowerCase() === 'l') {
-            e.preventDefault();
-            clickLikeButton();
+            case 'l':
+                e.preventDefault();
+                clickLikeButton();
+                break;
+
+            case 'c':
+                e.preventDefault();
+                clickCommentButton();
+                break;
         }
     });
 })();
